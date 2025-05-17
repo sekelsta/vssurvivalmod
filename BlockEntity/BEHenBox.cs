@@ -39,6 +39,7 @@ namespace Vintagestory.GameContent
         protected AssetLocation[] chickNames = new AssetLocation[10];
         protected double timeToIncubate;
         protected double occupiedTimeLast;
+        protected bool IsOccupiedClientside = false;
 
 
         public BlockEntityHenBox()
@@ -160,6 +161,7 @@ namespace Vintagestory.GameContent
 
             if (api.Side == EnumAppSide.Server)
             {
+                IsOccupiedClientside = false;
                 api.ModLoader.GetModSystem<POIRegistry>().AddPOI(this);
                 RegisterGameTickListener(On1500msTick, 1500);
             }
@@ -204,6 +206,7 @@ namespace Vintagestory.GameContent
                 AssetLocation chickName = chickNames[i];
                 if (chickName != null) tree.SetString("chick" + i, chickName.ToShortString());
             }
+            tree.SetBool("isOccupied", occupier != null && occupier.Alive);
         }
 
 
@@ -218,6 +221,7 @@ namespace Vintagestory.GameContent
                 string chickName = tree.GetString("chick" + i);
                 chickNames[i] = chickName == null ? null : new AssetLocation(chickName);
             }
+            IsOccupiedClientside = tree.GetBool("isOccupied");
         }
 
 
@@ -240,7 +244,7 @@ namespace Vintagestory.GameContent
                 else if (timeToIncubate > 0)
                     dsc.AppendLine(Lang.Get("Incubation time remaining: {0:0} hours", timeToIncubate * 24));
 
-                if (occupier == null && Block.LastCodePart() == fullCode)
+                if (!IsOccupiedClientside && Block.LastCodePart() == fullCode)
                     dsc.AppendLine(Lang.Get("A broody hen is needed!"));
             }
             else if (eggCount > 0)
