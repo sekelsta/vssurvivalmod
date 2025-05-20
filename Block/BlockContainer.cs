@@ -9,6 +9,8 @@ namespace Vintagestory.GameContent
 {
     public class BlockContainer : Block
     {
+        protected bool scatterContentsWhenBroken = false;
+
         public virtual float GetContainingTransitionModifierContained(IWorldAccessor world, ItemSlot inSlot, EnumTransitionType transType)
         {
             return 1;
@@ -135,6 +137,10 @@ namespace Vintagestory.GameContent
         {
             ItemStack stack = base.OnPickBlock(world, pos);
 
+            if (scatterContentsWhenBroken) {
+                return stack;
+            }
+
             BlockEntityContainer bec = world.BlockAccessor.GetBlockEntity(pos) as BlockEntityContainer;
 
             if (bec != null)
@@ -147,6 +153,11 @@ namespace Vintagestory.GameContent
 
         public override void OnBlockBroken(IWorldAccessor world, BlockPos pos, IPlayer byPlayer, float dropQuantityMultiplier = 1)
         {
+            if (scatterContentsWhenBroken) {
+                base.OnBlockBroken(world, pos, byPlayer, dropQuantityMultiplier);
+                return;
+            }
+
             bool preventDefault = false;
             foreach (BlockBehavior behavior in BlockBehaviors)
             {

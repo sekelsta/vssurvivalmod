@@ -23,10 +23,12 @@ namespace Vintagestory.GameContent
      * HenBox tracks the parent entity and the generation of each egg separately => in future could have 1 duck egg in a henbox for example, so that 1 duckling hatches and 2 hen chicks
      */
 
-    public class BlockEntityHenBox : BlockEntity, IAnimalNest
+    public class BlockEntityHenBox : BlockEntityDisplay, IAnimalNest
     {
-        internal InventoryGeneric inventory;
-        protected string fullCode = "1egg";
+        protected InventoryGeneric inventory;
+        public override InventoryBase Inventory => inventory;
+        public string inventoryClassName = "nestbox";
+        public override string InventoryClassName => inventoryClassName;
 
         public Size2i AtlasSize => (Api as ICoreClientAPI).BlockTextureAtlas.Size;
 
@@ -67,38 +69,63 @@ namespace Vintagestory.GameContent
 
         public virtual bool TryAddEgg(Entity entity, string chickCode, double incubationTime)
         {
-            if (Block.LastCodePart() == fullCode)
-            {
-                if (timeToIncubate == 0)
-                {
-                    timeToIncubate = incubationTime;
-                    occupiedTimeLast = entity.World.Calendar.TotalDays;
+            for (int i = 0; i < inventory.Count; ++i) {
+                if (inventory[i].Empty) {
+                    inventory[i].Itemstack = MakeEggItem(entity, chickCode, incubationTime, i);
+                    // TODO: Check for sane behavior if MakeEggItem returns null
+                    inventory.DidModifyItemSlot(inventory[i]);
+                    timeToIncubate = 0;
+                    return true;
                 }
-                this.MarkDirty();
-                return false;
             }
-
-            timeToIncubate = 0;
-            int eggs = CountEggs();
-            parentGenerations[eggs] = entity.WatchedAttributes.GetInt("generation", 0);
-            chickNames[eggs] = chickCode == null ? null : entity.Code.CopyWithPath(chickCode);
-            eggs++;
-            Block replacementBlock = Api.World.GetBlock(Block.CodeWithVariant("eggCount", eggs + ((eggs > 1) ? "eggs" : "egg")));
-            if (replacementBlock == null)
+            if (timeToIncubate == 0)
             {
-                return false;
+                timeToIncubate = incubationTime;
+                occupiedTimeLast = entity.World.Calendar.TotalDays;
             }
-            Api.World.BlockAccessor.ExchangeBlock(replacementBlock.Id, this.Pos);
-            this.Block = replacementBlock;
             this.MarkDirty();
+            return false;
+        }
 
-            return true;
+        protected ItemStack MakeEggItem(Entity entity, string chickCode, double incubationTime, int i)
+        {
+            ItemStack eggStack;
+            JsonItemStack[] eggTypes = entity.Properties.Attributes?["eggTypes"].AsArray<JsonItemStack>();
+            if (eggTypes == null)
+            {
+                string fallbackCode = "game:egg-chicken-raw";
+                entity.Api.Logger.Warning("No egg type specified for entity " + entity.Code + ", falling back to " + fallbackCode);
+                eggStack = new ItemStack(entity.World.GetItem(fallbackCode));
+            }
+            else
+            {
+                JsonItemStack jsonEgg = eggTypes[entity.World.Rand.Next(eggTypes.Length)];
+                if (!jsonEgg.Resolve(entity.World, null, false))
+                {
+                    entity.Api.Logger.Warning("Failed to resolve egg " + jsonEgg.Type + " with code " + jsonEgg.Code + " for entity " + entity.Code);
+                    return null;
+                }
+                eggStack = new ItemStack(jsonEgg.ResolvedItemstack.Collectible);
+            }
+
+            parentGenerations[i] = entity.WatchedAttributes.GetInt("generation", 0);
+            chickNames[i] = chickCode == null ? null : entity.Code.CopyWithPath(chickCode);
+
+            this.MarkDirty();
+            return eggStack;
         }
 
         protected int CountEggs()
         {
-            int eggs = Block.LastCodePart()[0];
-            return eggs <= '9' && eggs >= '0' ? eggs - '0' : 0;
+            int count = 0;
+            for (int i = 0; i < inventory.Count; ++i)
+            {
+                if (!inventory[i].Empty)
+                {
+                    ++count;
+                }
+            }
+            return count;
         }
 
         protected virtual void On1500msTick(float dt)
@@ -119,14 +146,17 @@ namespace Vintagestory.GameContent
             if (timeToIncubate <= 0)
             {
                 timeToIncubate = 0;
-                int eggs = CountEggs();
                 Random rand = Api.World.Rand;
 
-                for (int c = 0; c < eggs; c++)
+                for (int i = 0; i < inventory.Count; ++i)
                 {
-                    AssetLocation chickName = chickNames[c];
+                    if (inventory[i].Empty)
+                    {
+                        continue;
+                    }
+                    AssetLocation chickName = chickNames[i];
                     if (chickName == null) continue;
-                    int generation = parentGenerations[c];
+                    int generation = parentGenerations[i];
 
                     EntityProperties childType = Api.World.GetEntityType(chickName);
                     if (childType == null) continue;
@@ -141,36 +171,51 @@ namespace Vintagestory.GameContent
                     childEntity.Attributes.SetString("origin", "reproduction");
                     childEntity.WatchedAttributes.SetInt("generation", generation + 1);
                     Api.World.SpawnEntity(childEntity);
+
+                    inventory[i].Itemstack = null;
+                    inventory.DidModifyItemSlot(inventory[i]);
                 }
-
-
-                Block replacementBlock = Api.World.GetBlock(new AssetLocation(Block.FirstCodePart() + "-empty"));
-                Api.World.BlockAccessor.ExchangeBlock(replacementBlock.Id, this.Pos);
-                this.Api.World.SpawnCubeParticles(Pos.ToVec3d().Add(0.5, 0.5, 0.5), new ItemStack(this.Block), 1, 20, 1, null);
-                this.Block = replacementBlock;
             }
         }
 
 
         public override void Initialize(ICoreAPI api)
         {
+            inventoryClassName = Block.Attributes["inventoryClassName"]?.AsString();
+            int capacity = Block.Attributes["quantitySlots"]?.AsInt(1) ?? 1;
+            if (inventory == null) {
+                CreateInventory(capacity, api);
+            }
+            else if (capacity != inventory.Count) {
+                api.Logger.Warning("Nest " + Block.Code + " loaded with " + inventory.Count + " capacity when it should be " + capacity + ".");
+                InventoryGeneric oldInv = inventory;
+                CreateInventory(capacity, api);
+                for (int i = 0; i < capacity && i < oldInv.Count; ++i) {
+                    if (!oldInv[i].Empty) {
+                        inventory[i].Itemstack = oldInv[i].Itemstack;
+                        inventory.DidModifyItemSlot(inventory[i]);
+                    }
+                }
+            }
             base.Initialize(api);
 
-            fullCode = this.Block.Attributes?["fullVariant"]?.AsString(null);
-            if (fullCode == null) fullCode = "1egg";
-
-            if (api.Side == EnumAppSide.Server)
-            {
+            if (api.Side == EnumAppSide.Server) {
                 IsOccupiedClientside = false;
                 api.ModLoader.GetModSystem<POIRegistry>().AddPOI(this);
                 RegisterGameTickListener(On1500msTick, 1500);
             }
         }
 
-
-        public override void OnBlockPlaced(ItemStack byItemStack = null)
+        private void CreateInventory(int capacity, ICoreAPI api)
         {
-            base.OnBlockPlaced(byItemStack);
+            inventory = new InventoryGeneric(capacity, InventoryClassName, Pos?.ToString(), api);
+            inventory.Pos = this.Pos;
+            inventory.SlotModified += OnSlotModified;
+        }
+
+        private void OnSlotModified(int slot)
+        {
+            MarkDirty();
         }
 
 
@@ -212,6 +257,7 @@ namespace Vintagestory.GameContent
 
         public override void FromTreeAttributes(ITreeAttribute tree, IWorldAccessor worldForResolving)
         {
+            // TODO: Convert from old henbox to new
             base.FromTreeAttributes(tree, worldForResolving);
             timeToIncubate = tree.GetDouble("inc");
             occupiedTimeLast = tree.GetDouble("occ");
@@ -223,7 +269,6 @@ namespace Vintagestory.GameContent
             }
             IsOccupiedClientside = tree.GetBool("isOccupied");
         }
-
 
         public override void GetBlockInfo(IPlayer forPlayer, StringBuilder dsc)
         {
@@ -244,13 +289,35 @@ namespace Vintagestory.GameContent
                 else if (timeToIncubate > 0)
                     dsc.AppendLine(Lang.Get("Incubation time remaining: {0:0} hours", timeToIncubate * 24));
 
-                if (!IsOccupiedClientside && Block.LastCodePart() == fullCode)
+                if (!IsOccupiedClientside && eggCount >= inventory.Count)
                     dsc.AppendLine(Lang.Get("A broody hen is needed!"));
             }
             else if (eggCount > 0)
             {
                 dsc.AppendLine(Lang.Get("No eggs are fertilized"));
             }
+        }
+
+        protected override float[][] genTransformationMatrices() {
+            ModelTransform[] transforms = Block.Attributes["displayTransforms"]?.AsArray<ModelTransform>();
+            if (transforms.Length != DisplayedItems) {
+                capi.Logger.Warning("Display transforms for " + Block.Code + " block entity do not match number of displayed items.");
+            }
+
+            float[][] tfMatrices = new float[transforms.Length][];
+            for (int i = 0; i < transforms.Length; ++i) {
+                Vec3f off = transforms[i].Translation;
+                Vec3f rot = transforms[i].Rotation;
+                tfMatrices[i] = new Matrixf()
+                    .Translate(off.X, off.Y, off.Z)
+                    .Translate(0.5f, 0, 0.5f)
+                    .RotateX(rot.X * GameMath.DEG2RAD)
+                    .RotateY(rot.Y * GameMath.DEG2RAD)
+                    .RotateZ(rot.Z * GameMath.DEG2RAD)
+                    .Translate(-0.5f, 0, -0.5f)
+                    .Values;
+            }
+            return tfMatrices;
         }
     }
 }

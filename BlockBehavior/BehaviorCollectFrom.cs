@@ -6,8 +6,6 @@ namespace Vintagestory.GameContent
 {
     public class BehaviorCollectFrom : BlockBehavior
     {
-        
-
         public BehaviorCollectFrom(Block block) : base(block)
         {
         }
@@ -18,34 +16,68 @@ namespace Vintagestory.GameContent
             {
                 return false;
             }
-            if (!block.Code.Path.Contains("empty"))
+            BlockEntityHenBox nest = world.BlockAccessor.GetBlockEntity(blockSel.Position) as BlockEntityHenBox;
+            if (nest == null)
             {
-                handling = EnumHandling.PreventDefault;
-
-                //handles the collection of items, and the transformation of the block.
-                world.Logger.VerboseDebug("Collecting item(s) from target block at {0}.", blockSel.Position);
-
-                if (block.Drops != null && block.Drops.Length > 1)
+                // TODO: When could this happen? What to do?
+                // Maybe if the world is loaded once without the henbox file, then again with it?
+                // Probably give a user-facing error and return, or just crash? Or can we make a new blockentity?
+            }
+            // Try to take all eggs from nest
+            bool anyEggs = false;
+            for (int i = 0; i < nest.Inventory.Count; ++i)
+            {
+                if (!nest.Inventory[i].Empty)
                 {
-                    BlockDropItemStack drop = block.Drops[0];
-                    ItemStack stack = drop.GetNextItemStack();
-
-                    if (!byPlayer.InventoryManager.TryGiveItemstack(stack))
+                    string audit = nest.Inventory[i].Itemstack.Collectible?.Code;
+                    // TODO: remove attributes, so that the eggs will stack
+                    // Assume stack size is 1, because I don't understand inventory transfer code
+                    if (nest.Inventory[i].Itemstack.StackSize != 1)
                     {
-                        world.SpawnItemEntity(drop.GetNextItemStack(), blockSel.Position);
+                        throw new System.Exception("Henbox should only have items stacked to 1!");
                     }
-
-                    AssetLocation loc = block.Code.CopyWithPath(block.Code.Path.Replace(block.Code.Path.Split('-').Last(), "empty"));
-
-                    world.BlockAccessor.SetBlock(world.GetBlock(loc).BlockId, blockSel.Position);
-
-                    world.PlaySoundAt(new AssetLocation("sounds/player/collect"), blockSel.Position, 0, byPlayer);
+                    if (byPlayer.InventoryManager.TryGiveItemstack(nest.Inventory[i].Itemstack))
+                    {
+                        ItemStack stack = nest.Inventory[i].TakeOut(1);
+                        anyEggs = true;
+                        world.Api.Logger.Audit(byPlayer.PlayerName + " took 1x " + audit + " from " + nest.Block.Code + " at " + nest.Pos);
+                    }
+                    else
+                    {
+                        // For some reason trying and failing to give itemstack changes the stack size to 0
+                        nest.Inventory[i].Itemstack.StackSize = 1;
+                    }
+                    // If it doesn't fit, leave it in the nest
                 }
-
-                return true;
+/*
+                if (!nest.Inventory[i].Empty)
+                {
+                    string audit = nest.Inventory[i].Itemstack.Collectible?.Code;
+                    int quantity = nest.Inventory[i].Itemstack.StackSize;
+                    // TODO: Test that this does the right thing if the player can only fit part of the stack
+                    if (byPlayer.InventoryManager.TryGiveItemstack(nest.Inventory[i].Itemstack))
+                    {
+                        if (quantity == stack.StackSize)
+                        {
+                            ItemStack stack = nest.Inventory[i].TakeOutWhole();
+                        }
+                        anyEggs = true;
+                        world.Api.Logger.Audit(byPlayer.PlayerName + " took " + quantity - stack.StackSize + "x " + audit + " from " + Block.Code + " at " + Pos);
+                    }
+                    else
+                    {
+                        // For some reason trying and failing to give itemstack changes the stack size to 0
+                        nest.Inventory[i].Itemstack.StackSize = quantity;
+                    }
+                    // If it doesn't fit, leave it in the nest
+                }
+*/
             }
 
-            return false;
+            if (anyEggs) {
+                world.PlaySoundAt(new AssetLocation("sounds/player/collect"), blockSel.Position.X, blockSel.Position.Y, blockSel.Position.Z, byPlayer);
+            }
+            return anyEggs;
         }
 
         public override bool OnBlockInteractStep(float secondsUsed, IWorldAccessor world, IPlayer byPlayer, BlockSelection blockSel, ref EnumHandling handling)
