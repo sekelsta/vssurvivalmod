@@ -5,12 +5,14 @@ namespace Vintagestory.GameContent
 {
     public class BlockHenbox : BlockContainer
     {
-        public BlockHenbox() : base() {
+        public BlockHenbox() : base()
+        {
             scatterContentsWhenBroken = true;
         }
 
         public override WorldInteraction[] GetPlacedBlockInteractionHelp(IWorldAccessor world, BlockSelection selection, IPlayer forPlayer)
         {
+            // TODO
             if (Variant["eggCount"] == "empty") return new WorldInteraction[0];
 
             return new WorldInteraction[]

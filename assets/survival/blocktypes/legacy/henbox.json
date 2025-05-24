@@ -1,0 +1,8 @@
+{
+	code: "henbox",
+	class: "BlockHenbox",
+	entityClass: "HenBox",
+	variantgroups: [
+		{code: "eggCount", states: ["1egg", "2eggs", "3eggs"]}
+	],
+}

@@ -30,8 +30,6 @@ namespace Vintagestory.GameContent
         public string inventoryClassName = "nestbox";
         public override string InventoryClassName => inventoryClassName;
 
-        public Size2i AtlasSize => (Api as ICoreClientAPI).BlockTextureAtlas.Size;
-
         public Vec3d Position => Pos.ToVec3d().Add(0.5, 0.5, 0.5);
         public string Type => "nest";
 
@@ -46,10 +44,11 @@ namespace Vintagestory.GameContent
 
         public BlockEntityHenBox()
         {
+            container = new ConstantPerishRateContainer(() => Inventory, "inventory");
         }
 
 
-        public bool IsSuitableFor(Entity entity)
+        public virtual bool IsSuitableFor(Entity entity)
         {
             return entity is EntityAgent && entity.Code.Path == "chicken-hen";
         }
@@ -59,12 +58,17 @@ namespace Vintagestory.GameContent
             return occupier != null && occupier != entity;
         }
 
-        public void SetOccupier(Entity entity)
+        public virtual void SetOccupier(Entity entity)
         {
+            if (occupier == entity)
+            {
+                return;
+            }
             occupier = entity;
+            MarkDirty();
         }
 
-        public float DistanceWeighting => 2 / (CountEggs() + 2);
+        public virtual float DistanceWeighting => 2 / (CountEggs() + 2);
 
 
         public virtual bool TryAddEgg(Entity entity, string chickCode, double incubationTime)
@@ -72,7 +76,6 @@ namespace Vintagestory.GameContent
             for (int i = 0; i < inventory.Count; ++i) {
                 if (inventory[i].Empty) {
                     inventory[i].Itemstack = MakeEggItem(entity, chickCode, incubationTime, i);
-                    // TODO: Check for sane behavior if MakeEggItem returns null
                     inventory.DidModifyItemSlot(inventory[i]);
                     timeToIncubate = 0;
                     return true;
@@ -82,8 +85,8 @@ namespace Vintagestory.GameContent
             {
                 timeToIncubate = incubationTime;
                 occupiedTimeLast = entity.World.Calendar.TotalDays;
+                MarkDirty();
             }
-            this.MarkDirty();
             return false;
         }
 
@@ -110,8 +113,8 @@ namespace Vintagestory.GameContent
 
             parentGenerations[i] = entity.WatchedAttributes.GetInt("generation", 0);
             chickNames[i] = chickCode == null ? null : entity.Code.CopyWithPath(chickCode);
+            MarkDirty();
 
-            this.MarkDirty();
             return eggStack;
         }
 
@@ -181,13 +184,14 @@ namespace Vintagestory.GameContent
 
         public override void Initialize(ICoreAPI api)
         {
-            inventoryClassName = Block.Attributes["inventoryClassName"]?.AsString();
+            inventoryClassName = Block.Attributes["inventoryClassName"]?.AsString() ?? inventoryClassName;
             int capacity = Block.Attributes["quantitySlots"]?.AsInt(1) ?? 1;
             if (inventory == null) {
                 CreateInventory(capacity, api);
             }
             else if (capacity != inventory.Count) {
                 api.Logger.Warning("Nest " + Block.Code + " loaded with " + inventory.Count + " capacity when it should be " + capacity + ".");
+                // TODO: Reconsider this - at the very least fill empty slots if oldInv.Count > capacity
                 InventoryGeneric oldInv = inventory;
                 CreateInventory(capacity, api);
                 for (int i = 0; i < capacity && i < oldInv.Count; ++i) {
@@ -206,14 +210,14 @@ namespace Vintagestory.GameContent
             }
         }
 
-        private void CreateInventory(int capacity, ICoreAPI api)
+        protected void CreateInventory(int capacity, ICoreAPI api)
         {
             inventory = new InventoryGeneric(capacity, InventoryClassName, Pos?.ToString(), api);
             inventory.Pos = this.Pos;
             inventory.SlotModified += OnSlotModified;
         }
 
-        private void OnSlotModified(int slot)
+        protected virtual void OnSlotModified(int slot)
         {
             MarkDirty();
         }
@@ -257,6 +261,11 @@ namespace Vintagestory.GameContent
 
         public override void FromTreeAttributes(ITreeAttribute tree, IWorldAccessor worldForResolving)
         {
+            TreeAttribute invTree = (TreeAttribute) tree["inventory"];
+            if (inventory == null) {
+                int capacity = invTree.GetInt("qslots");
+                CreateInventory(capacity, worldForResolving.Api);
+            }
             // TODO: Convert from old henbox to new
             base.FromTreeAttributes(tree, worldForResolving);
             timeToIncubate = tree.GetDouble("inc");
@@ -268,6 +277,7 @@ namespace Vintagestory.GameContent
                 chickNames[i] = chickName == null ? null : new AssetLocation(chickName);
             }
             IsOccupiedClientside = tree.GetBool("isOccupied");
+            RedrawAfterReceivingTreeAttributes(worldForResolving);
         }
 
         public override void GetBlockInfo(IPlayer forPlayer, StringBuilder dsc)
@@ -298,14 +308,28 @@ namespace Vintagestory.GameContent
             }
         }
 
-        protected override float[][] genTransformationMatrices() {
+        protected override float[][] genTransformationMatrices()
+        {
             ModelTransform[] transforms = Block.Attributes["displayTransforms"]?.AsArray<ModelTransform>();
-            if (transforms.Length != DisplayedItems) {
-                capi.Logger.Warning("Display transforms for " + Block.Code + " block entity do not match number of displayed items.");
+            if (transforms == null)
+            {
+                capi.Logger.Warning("No display transforms found for " + Block.Code + ", autogenerating placeholders.");
+                transforms = new ModelTransform[DisplayedItems];
+                for (int i = 0; i < transforms.Length; ++i)
+                {
+                    // TODO: Consider doing something stupid like having the Z value increase for each one
+                    transforms[i] = new ModelTransform();
+                }
+            }
+            if (transforms.Length != DisplayedItems)
+            {
+                // TODO: What happens in this case? If there are too few transforms, do we crash when the nestbox fills up?
+                capi.Logger.Warning("Display transforms for " + Block.Code + " block entity do not match number of displayed items. Items: " + DisplayedItems + ", transforms: " + transforms.Length);
             }
 
             float[][] tfMatrices = new float[transforms.Length][];
-            for (int i = 0; i < transforms.Length; ++i) {
+            for (int i = 0; i < transforms.Length; ++i)
+            {
                 Vec3f off = transforms[i].Translation;
                 Vec3f rot = transforms[i].Rotation;
                 tfMatrices[i] = new Matrixf()

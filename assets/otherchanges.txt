@@ -1,0 +1,4 @@
+Lang files - henbox-empty to henbox, remove (empty) from lang string
+remove henbox (1 egg), henbox (2 eggs), henbox (3 eggs)
+
+delete files: survival/shapes/block/wood/henbox/henbox-(1egg/2eggs/3eggs).json
