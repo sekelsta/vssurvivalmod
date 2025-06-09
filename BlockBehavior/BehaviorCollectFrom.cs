@@ -16,20 +16,20 @@ namespace Vintagestory.GameContent
             {
                 return false;
             }
-            // TODO: Could cast to containerdisplay or higher
+
             BlockEntityHenBox nest = world.BlockAccessor.GetBlockEntity(blockSel.Position) as BlockEntityHenBox;
             if (nest == null)
             {
-                // TODO: When could this happen? What to do?
-                // Maybe if the world is loaded once without the henbox file, then again with it?
-                // Probably give a user-facing error and return, or just crash? Or can we make a new blockentity?
-                throw new System.Exception("nest not suppsoed to be null!");
+                // Could happen if the world is loaded without the block definition due to mods
+                world.Api.Logger.Warning("Nest box at " + blockSel.Position + " has no associated BlockEntityHenBox, try breaking the block and placing it again.");
+                return false;
             }
 
             // TEST CODE. TODO: Remove
             ItemSlot slot = byPlayer.InventoryManager.ActiveHotbarSlot;
-            ItemStackMoveOperation op = new ItemStackMoveOperation(nest.Api.World, EnumMouseButton.Left, 0, EnumMergePriority.AutoMerge, 1);
             if (!slot.Empty) {
+                //ItemStackMoveOperation op = new ItemStackMoveOperation(nest.Api.World, EnumMouseButton.Left, 0, EnumMergePriority.AutoMerge);
+                ItemStackMoveOperation op = new ItemStackMoveOperation(nest.Api.World, EnumMouseButton.Left, 0, EnumMergePriority.AutoMerge, 1);
                 // Place egg in nest
                 for (int i = 0; i < nest.Inventory.Count; ++i) {
                     if (nest.Inventory[i].Empty) {
@@ -45,6 +45,7 @@ namespace Vintagestory.GameContent
                 return false;
             }
             //// END TEST CODE
+
             // Try to take all eggs from nest
             bool anyEggs = false;
             for (int i = 0; i < nest.Inventory.Count; ++i)
@@ -55,13 +56,13 @@ namespace Vintagestory.GameContent
                     int quantity = nest.Inventory[i].Itemstack.StackSize;
                     world.Api.Logger.Notification("sekdebug slot=" + i + " item=" + audit + " quantity=" + quantity + " (before)");
                     // TODO: Test that this does the right thing if the player can only fit part of the stack
-                    // TODO: remove attributes, so that the eggs will stack
                     if (byPlayer.InventoryManager.TryGiveItemstack(nest.Inventory[i].Itemstack))
                     {
                         int taken = quantity - (nest.Inventory[i].Itemstack?.StackSize ?? 0);
                         world.Api.Logger.Notification("sekdebug slot=" + i + " item=" + nest.Inventory[i].Itemstack?.Collectible?.Code + " quantity=" + nest.Inventory[i].Itemstack?.StackSize + " (during)");
                         if (nest.Inventory[i].Itemstack != null && nest.Inventory[i].Itemstack.StackSize == 0)
                         {
+                            // Otherwise eggs with stack size 0 will still be displayed and still occupy a slot
                             nest.Inventory[i].Itemstack = null;
                         }
                         else if (quantity == nest.Inventory[i].Itemstack.StackSize)
@@ -71,7 +72,7 @@ namespace Vintagestory.GameContent
 
                         anyEggs = true;
                         world.Api.Logger.Audit(byPlayer.PlayerName + " took " + taken + "x " + audit + " from " + nest.Block.Code + " at " + nest.Pos);
-                        // TODO: Why does this still show the egg?
+                        // TODO: Update hotbar slots?
                     }
                     else
                     {
