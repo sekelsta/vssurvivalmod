@@ -184,8 +184,8 @@ namespace Vintagestory.GameContent
 
         public override void Initialize(ICoreAPI api)
         {
-            inventoryClassName = Block.Attributes["inventoryClassName"]?.AsString() ?? inventoryClassName;
-            int capacity = Block.Attributes["quantitySlots"]?.AsInt(1) ?? 1;
+            inventoryClassName = Block.Attributes?["inventoryClassName"]?.AsString() ?? inventoryClassName;
+            int capacity = Block.Attributes?["quantitySlots"]?.AsInt(1) ?? 1;
             if (inventory == null) {
                 CreateInventory(capacity, api);
             }
@@ -310,7 +310,7 @@ namespace Vintagestory.GameContent
 
         protected override float[][] genTransformationMatrices()
         {
-            ModelTransform[] transforms = Block.Attributes["displayTransforms"]?.AsArray<ModelTransform>();
+            ModelTransform[] transforms = Block.Attributes?["displayTransforms"]?.AsArray<ModelTransform>();
             if (transforms == null)
             {
                 capi.Logger.Warning("No display transforms found for " + Block.Code + ", autogenerating placeholders.");
