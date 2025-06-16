@@ -28,14 +28,16 @@ namespace Vintagestory.GameContent
             // TEST CODE. TODO: Remove
             ItemSlot slot = byPlayer.InventoryManager.ActiveHotbarSlot;
             if (!slot.Empty) {
-                //ItemStackMoveOperation op = new ItemStackMoveOperation(nest.Api.World, EnumMouseButton.Left, 0, EnumMergePriority.AutoMerge);
+                //ItemStackMoveOperation op = new ItemStackMoveOperation(nest.Api.World, EnumMouseButton.Left, 0, EnumMergePriority.AutoMerge, slot.Itemstack.StackSize);
                 ItemStackMoveOperation op = new ItemStackMoveOperation(nest.Api.World, EnumMouseButton.Left, 0, EnumMergePriority.AutoMerge, 1);
                 // Place egg in nest
                 for (int i = 0; i < nest.Inventory.Count; ++i) {
                     if (nest.Inventory[i].Empty) {
                         AssetLocation sound = slot.Itemstack?.Block?.Sounds?.Place;
                         AssetLocation itemPlaced = slot.Itemstack?.Collectible?.Code;
-                        if (slot.TryPutInto(nest.Inventory[i], ref op) > 0) {
+                        int placed = slot.TryPutInto(nest.Inventory[i], ref op);
+                        world.Api.Logger.Notification("sekdebug slot=" + i + " item=" + itemPlaced + " placed=" + placed);
+                        if (placed > 0) {
                             handling = EnumHandling.PreventSubsequent;
                             world.Api.Logger.Notification("sekdebug slot=" + i + " item=" + itemPlaced + " quantity=" + nest.Inventory[i].Itemstack.StackSize + " (placed)");
                             return true;
