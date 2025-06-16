@@ -289,8 +289,9 @@ namespace Vintagestory.GameContent
 
             // TEST CODE. TODO: Remove
             ItemSlot slot = byPlayer.InventoryManager.ActiveHotbarSlot;
-            ItemStackMoveOperation op = new ItemStackMoveOperation(Api.World, EnumMouseButton.Left, 0, EnumMergePriority.AutoMerge, 1);
             if (slot.Itemstack != null) {
+                ItemStackMoveOperation op = new ItemStackMoveOperation(Api.World, EnumMouseButton.Left, 0, EnumMergePriority.AutoMerge, slot.Itemstack.StackSize);
+                //ItemStackMoveOperation op = new ItemStackMoveOperation(Api.World, EnumMouseButton.Left, 0, EnumMergePriority.AutoMerge, 1);
                 // Place egg in nest
                 for (int i = 0; i < inventory.Count; ++i) {
                     if (inventory[i].Empty) {
@@ -314,39 +315,31 @@ namespace Vintagestory.GameContent
                 {
                     string audit = inventory[i].Itemstack.Collectible?.Code;
                     int quantity = inventory[i].Itemstack.StackSize;
-/*
-                    if (!byPlayer.InventoryManager.TryGiveItemstack(stack))
-                    {
-                        world.SpawnItemEntity(drop.GetNextItemStack(), blockSel.Position);
-                    }
-                    inventory[i].Itemstack = null;
-                    inventory.DidModifyItemSlot(inventory[i]);*/
 
-                    world.Api.Logger.Notification("sekdebug slot=" + i + " item=" + audit + " quantity=" + quantity + " (before)");
-                    // TODO: Test that this does the right thing if the player can only fit part of the stack
-                    if (byPlayer.InventoryManager.TryGiveItemstack(inventory[i].Itemstack))
+                    bool gave = byPlayer.InventoryManager.TryGiveItemstack(inventory[i].Itemstack);
+                    int taken = quantity - (inventory[i].Itemstack?.StackSize ?? 0);
+                    if (gave)
                     {
-                        int taken = quantity - (inventory[i].Itemstack?.StackSize ?? 0);
-                        world.Api.Logger.Notification("sekdebug slot=" + i + " item=" + inventory[i].Itemstack?.Collectible?.Code + " quantity=" + inventory[i].Itemstack?.StackSize + " (during)");
-                        if (inventory[i].Itemstack != null && inventory[i].Itemstack.StackSize == 0)
-                        {
-                            // Otherwise eggs with stack size 0 will still be displayed and still occupy a slot
-                            inventory[i].Itemstack = null;
-                        }
-                        else if (quantity == inventory[i].Itemstack.StackSize)
+                        if (inventory[i].Itemstack != null && quantity == inventory[i].Itemstack.StackSize)
                         {
                             ItemStack stack = inventory[i].TakeOutWhole();
+                            taken = quantity;
                         }
 
                         anyEggs = true;
                         world.Api.Logger.Audit(byPlayer.PlayerName + " took " + taken + "x " + audit + " from " + Block.Code + " at " + Pos);
                         inventory.DidModifyItemSlot(inventory[i]);
                     }
-                    else
+                    if (inventory[i].Itemstack != null && inventory[i].Itemstack.StackSize == 0)
                     {
-                        world.Api.Logger.Notification("sekdebug trygiveitemstack returned false");
-                        // For some reason trying and failing to give itemstack changes the stack size to 0
-                        inventory[i].Itemstack.StackSize = quantity;
+                        // This can happen even if TryGiveItemstack returned false, if the player is in creative mode
+                        if (!gave)
+                        {
+                            world.Api.Logger.Audit(byPlayer.PlayerName + " voided " + taken + "x " + audit + " from " + Block.Code + " at " + Pos);
+                        }
+                        // Otherwise eggs with stack size 0 will still be displayed and still occupy a slot
+                        inventory[i].Itemstack = null;
+                        inventory.DidModifyItemSlot(inventory[i]);
                     }
                     // If it doesn't fit, leave it in the nest
                 }
