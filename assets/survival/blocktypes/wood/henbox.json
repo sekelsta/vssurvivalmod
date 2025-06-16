@@ -2,7 +2,6 @@
 	code: "henbox",
 	class: "BlockHenbox",
 	entityClass: "HenBox",
-	behaviors: [{ name: "CollectFrom"}],
 	attributes: {
         inventoryClassName: "henbox",
         quantitySlots: 3,

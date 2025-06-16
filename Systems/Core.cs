@@ -632,7 +632,6 @@ namespace Vintagestory.GameContent
             api.RegisterBlockBehaviorClass("PushEventOnBlockBroken", typeof(BlockBehaviorPushEventOnBlockBroken));
             api.RegisterBlockBehaviorClass("RightClickPickup", typeof(BlockBehaviorRightClickPickup));
             api.RegisterBlockBehaviorClass("SneakPlacing", typeof(BlockBehaviorSneakPlacing));
-            api.RegisterBlockBehaviorClass("CollectFrom", typeof(BehaviorCollectFrom));
             api.RegisterBlockBehaviorClass("Lockable", typeof(BlockBehaviorLockable));
             api.RegisterBlockBehaviorClass("DropNotSnowCovered", typeof(BlockBehaviorDropNotSnowCovered));
             api.RegisterBlockBehaviorClass("CanAttach", typeof(BlockBehaviorCanAttach));
