@@ -384,18 +384,16 @@ namespace Vintagestory.GameContent
             ModelTransform[] transforms = Block.Attributes?["displayTransforms"]?.AsArray<ModelTransform>();
             if (transforms == null)
             {
-                capi.Logger.Warning("No display transforms found for " + Block.Code + ", autogenerating placeholders.");
+                capi.Logger.Warning("No display transforms found for " + Block.Code + ", placed items may be invisible or in the wrong location.");
                 transforms = new ModelTransform[DisplayedItems];
                 for (int i = 0; i < transforms.Length; ++i)
                 {
-                    // TODO: Consider doing something stupid like having the Z value increase for each one
                     transforms[i] = new ModelTransform();
                 }
             }
             if (transforms.Length != DisplayedItems)
             {
-                // TODO: What happens in this case? If there are too few transforms, do we crash when the nestbox fills up?
-                capi.Logger.Warning("Display transforms for " + Block.Code + " block entity do not match number of displayed items. Items: " + DisplayedItems + ", transforms: " + transforms.Length);
+                capi.Logger.Warning("Display transforms for " + Block.Code + " block entity do not match number of displayed items, later placed items may be invisible or in the wrong location. Items: " + DisplayedItems + ", transforms: " + transforms.Length);
             }
 
             float[][] tfMatrices = new float[transforms.Length][];
